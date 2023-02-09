@@ -22,19 +22,14 @@ find_package(ddsmetadata REQUIRED)
 
 include_directories(include)
 
-set(SOURCES
-    src/prophesee_ros_publisher.cpp)
-set(INCLUDES
-  include/prophesee_ros_publisher.h)
-
 set(dependencies
-  cv_bridge
-  rclcpp
-  rclcpp_components
-  std_msgs
-  sensor_msgs
-  ddsmetadata
-  image_transport
+    cv_bridge
+    rclcpp
+    rclcpp_components
+    std_msgs
+    sensor_msgs
+    ddsmetadata
+    image_transport
 )
 
 add_executable(prophesee_ros_publisher
@@ -42,9 +37,13 @@ src/prophesee_ros_publisher.cpp
 )
 ament_target_dependencies(prophesee_ros_publisher
                           ${dependencies})
-target_link_libraries(prophesee_ros_publisher ${OPENCV_INCLUDE_DIRS} MetavisionSDK::core MetavisionSDK::driver MetavisionSDK::ui opencv_highgui)
+target_link_libraries(prophesee_ros_publisher ${OPENCV_INCLUDE_DIRS} 
+                      MetavisionSDK::core 
+                      MetavisionSDK::driver 
+                      MetavisionSDK::ui 
+                      opencv_highgui)
 
 install(TARGETS
-       prophesee_ros_publisher
-       DESTINATION lib/${PROJECT_NAME})
+        prophesee_ros_publisher
+        DESTINATION lib/${PROJECT_NAME})
 ament_package()
