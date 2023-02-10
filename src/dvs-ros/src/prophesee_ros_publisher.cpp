@@ -108,8 +108,8 @@ void PropheseeWrapperPublisher::publishCDEvents() {
           const unsigned int buffer_size = ev_end - ev_begin;
           // Get the current time
           event_buffer_current_time_ = rclcpp::Time((
-                      start_timestamp_.nanoseconds()+
-                      ev_begin->t * 1000.00));
+                      (start_timestamp_.nanoseconds()+
+                      ev_begin->t * 1000.00)));
           /** In case the buffer is empty we set the starting time stamp **/
           if (event_buffer_.empty()) {
               // Get starting time
@@ -121,7 +121,7 @@ void PropheseeWrapperPublisher::publishCDEvents() {
           std::copy(ev_begin, ev_end, inserter);
           /** Get the last time stamp **/
           event_buffer_current_time_ = rclcpp::Time(
-            start_timestamp_.nanoseconds() + (ev_end - 1)->t * 1000.00);
+            (start_timestamp_.nanoseconds() + (ev_end - 1)->t * 1000.00));
         }
 
         if ((event_buffer_current_time_ - event_buffer_start_time_) >=
@@ -129,13 +129,14 @@ void PropheseeWrapperPublisher::publishCDEvents() {
             /** Create the message **/
           ddsmetadata::msg::DDSMetaData::UniquePtr dds_buffer(
                                   new ddsmetadata::msg::DDSMetaData());
-          char* mdata_ptr = reinterpret_cast<char*>(malloc(13));
           char* dds_info_ptr = reinterpret_cast<char*>(malloc(16));
           int insert_index = 0;
           // Sensor geometry in header of the message
-          int64_t buffer_time = event_buffer_current_time_.nanoseconds();
+          rclcpp::Time process_begin_time = rclcpp::Clock().now();
+          int64_t buffer_time = process_begin_time.nanoseconds();
           RCLCPP_INFO(rclcpp::Node::get_logger(),
-                      "[CONF] The data buffer_time = %d", buffer_time);
+                      "[CONF] The event_buffer_current_time_ = %ld",
+                      buffer_time);
           unsigned int height = camera_.geometry().height();
           unsigned int width  = camera_.geometry().width();
 
@@ -143,7 +144,7 @@ void PropheseeWrapperPublisher::publishCDEvents() {
           dds_buffer->nd = 1;
           dds_buffer->type = 2;
           dds_buffer->elsize = 1;
-          dds_buffer->total_size = event_buffer_.size()*13+16;
+          dds_buffer->total_size = height*width+16;
           dds_buffer->dims[0] = dds_buffer->total_size;
           dds_buffer->strides[0] = 1;
           for (int i = 1; i < 5; i++) {
@@ -155,35 +156,32 @@ void PropheseeWrapperPublisher::publishCDEvents() {
           memcpy(dds_info_ptr+12, &height, 4);
           dds_buffer->mdata = std::vector<unsigned char>(dds_info_ptr,
                                                          dds_info_ptr+16);
+          // the image of P value
+          std::vector<char> image(height*width);
           // Copy the events to the ros buffer format
           for (const Metavision::EventCD *it = std::addressof(event_buffer_[0]);
                it != std::addressof(event_buffer_[event_buffer_.size()]);
                ++it) {
-              int64_t time = start_timestamp_.nanoseconds() + it->t * 1000.00;
-              RCLCPP_INFO(rclcpp::Node::get_logger(),
-                          "[CONF] The data buffer_size = %d",
-                          event_buffer_.size());
-              RCLCPP_INFO(rclcpp::Node::get_logger(),
-                          "[CONF] The data [width, height] = [%d,%d]",
-                          width, height);
-              RCLCPP_INFO(rclcpp::Node::get_logger(),
-                          "[CONF] The data [x,y,p,stamp] = [%d,%d,%d,%ld]",
-                          it->x, it->y, it->p, time);
-              memcpy(mdata_ptr, &it->x, 2);
-              memcpy(mdata_ptr+2, &it->y, 2);
-              memcpy(mdata_ptr+4, &it->p, 1);
-              memcpy(mdata_ptr+5, &time, 8);
-              dds_buffer->mdata.insert(
-                            dds_buffer->mdata.begin()+16+insert_index,
-                            mdata_ptr, mdata_ptr+13);
-              insert_index += 13;
-              memset(mdata_ptr, 0, 13);
+            int64_t time = start_timestamp_.nanoseconds() + it->t * 1000.00;
+            RCLCPP_INFO(rclcpp::Node::get_logger(),
+                        "[CONF] The data buffer_size = %d",
+                        event_buffer_.size());
+            RCLCPP_INFO(rclcpp::Node::get_logger(),
+                        "[CONF] The data [width, height] = [%d,%d]",
+                        width, height);
+            RCLCPP_INFO(rclcpp::Node::get_logger(),
+                        "[CONF] The data [x,y,p,stamp] = [%d,%d,%d,%ld]",
+                        it->x, it->y, it->p, time);
+            // let the changed event's P value(low->high, high->low) be 1.
+            image[(it->y)*width+it->x] = 1;
           }
-          rclcpp::Time dds_buffer_finished_timestamp = rclcpp::Clock().now();
+          dds_buffer->mdata.insert(dds_buffer->mdata.begin()+16,
+                                   image.begin(), image.end());
+          rclcpp::Time process_end_time = rclcpp::Clock().now();
           RCLCPP_INFO(rclcpp::Node::get_logger(),
-                      "Already publihsed once, end time is %d",
-                      dds_buffer_finished_timestamp.nanoseconds());
-          free(mdata_ptr);
+                      "Already publihsed once, end time = %ld",
+                      process_end_time.nanoseconds());
+
           free(dds_info_ptr);
           // Publish the message
           pub_cd_events_->publish(std::move(dds_buffer));
